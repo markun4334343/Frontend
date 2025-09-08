@@ -50,42 +50,88 @@
 <script>
 // Import the CSS file
 import '@/assets/style.css';
+// Import the API base URL
+import { API_BASE } from '@/config/api';
 
 export default {
   name: 'App',
-  // Data function returns the reactive state for our component
   data() {
     return {
-      newTask: '', // Holds the text from the input field
-      tasks: []    // This array will hold all our task objects
+      newTask: '',
+      tasks: []    // This will now come from backend
     }
   },
-  // Computed properties are like reactive getters
   computed: {
     completedCount() {
-      // Count how many tasks are marked as completed
       return this.tasks.filter(task => task.completed).length;
     }
   },
-  // Methods are functions that can be called from the template
+  // Load tasks from backend when component mounts
+  async mounted() {
+    await this.loadTasks();
+  },
   methods: {
-    addTask() {
-      if (this.newTask.trim() !== '') {
-        // Add a new task object to the tasks array
-        this.tasks.push({
-          text: this.newTask,
-          completed: false
-        });
-        // Clear the input field
-        this.newTask = '';
+    // Load tasks from backend
+    async loadTasks() {
+      try {
+        const response = await fetch(`${API_BASE}/api/tasks`);
+        this.tasks = await response.json();
+      } catch (error) {
+        console.error('Failed to load tasks:', error);
+        // Fallback to local storage
+        this.tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
       }
     },
-    removeTask(index) {
-      // Remove a task from the array at a specific index
-      this.tasks.splice(index, 1);
+
+    // Add task to backend
+    async addTask() {
+      if (this.newTask.trim() !== '') {
+        try {
+          const response = await fetch(`${API_BASE}/api/tasks`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text: this.newTask,
+              completed: false
+            })
+          });
+
+          const newTask = await response.json();
+          this.tasks.push(newTask);
+          this.newTask = '';
+        } catch (error) {
+          console.error('Failed to add task:', error);
+          // Fallback: add locally
+          this.tasks.push({
+            text: this.newTask,
+            completed: false
+          });
+          this.newTask = '';
+          localStorage.setItem('tasks', JSON.stringify(this.tasks));
+        }
+      }
+    },
+
+    // Remove task from backend
+    async removeTask(index) {
+      const task = this.tasks[index];
+      try {
+        // If task has an ID from backend, use it. Otherwise use index as fallback
+        if (task.id) {
+          await fetch(`${API_BASE}/api/tasks/${task.id}`, {
+            method: 'DELETE'
+          });
+        }
+        this.tasks.splice(index, 1);
+      } catch (error) {
+        console.error('Failed to delete task:', error);
+        // Fallback: remove locally
+        this.tasks.splice(index, 1);
+        localStorage.setItem('tasks', JSON.stringify(this.tasks));
+      }
     }
   }
 }
 </script>
-
-<!-- The style section is now removed and moved to a separate file -->
